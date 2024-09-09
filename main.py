@@ -198,24 +198,24 @@ class DtxHeader(object):
         self.detail_scale = struct.unpack("<f",bytes_.read(4))[0]
         self.detail_angle = int.from_bytes(bytes_.read(2), 'little', signed=True)
 
-       # Read a row of 128 Bytes
+        # Lese eine Zeile von 128 Bytes
         self.command_raw = bytes_.read(128)
 
-        # If first Byte of command row is 0x00, command string is not used/not set
+        # Wenn das erste Byte 0x00 ist, ist der Befehl nicht gesetzt
         if self.command_raw[0] == 0x00:
                self.command_string = ""
         else:
-            # Look for the first 0x00 (Null-Byte)
+            # Suche das erste Vorkommen von 0x00 (Null-Byte)
             null_byte_index = self.command_raw.find(b'\x00')
 
             if null_byte_index != -1:
-                # Convert all chars until the first 0x00 to a string
+                # Konvertiere alle Zeichen bis zum ersten 0x00 zu einem String
                 self.command_string = self.command_raw[:null_byte_index].decode('utf-8')
             else:
-                # when no Null-Byte is found, decode the whole string
+                # Wenn kein Null-Byte gefunden wird, den gesamten String dekodieren
                 self.command_string = self.command_raw.decode('utf-8')
 
-            # Fill with null char (\0) to the length of 128
+            # Füge Nullzeichen (\0) bis zur Länge von 128 hinzu
             self.command_string = self.command_string.ljust(128, '\0')
 
         # If light_flag is 1, we find LIGHTDEFS definition and read all the bytes to the end of file starting from 32nd byte
@@ -360,17 +360,33 @@ if args.output and header.version == -5:
     input_file.seek(27)
     output_file.seek(27)
     # Writing everything else till the end of header
-    output_file.write(input_file.read(137))
-    # Closing output file
-    output_file.close()
+    output_file.write(input_file.read(9))  # Change to read 9 bytes
 
-    # Writing Light String if it is present. In this rare case we file reopen in append mode
+    # Seek to byte 36 for the command string
+    input_file.seek(36)
+    command_string = bytearray()
+            
+    # Read up to byte 163 or until a null byte is found
+    for _ in range(128):  # 128 bytes to cover from 36 to 163
+        byte = input_file.read(1)
+        if byte == b'\x00':
+            break
+        command_string.extend(byte)
+            
+    # Pad the command string with 0x00 to ensure it is 128 bytes long
+    while len(command_string) < 128:
+        command_string.append(0x00)
+
+    # Write the command string to the output file
+    output_file.seek(36)
+    output_file.write(command_string)
+    
+   # Writing Light String if it is present. In this rare case we file reopen in append mode
     if header.light_flag == 1:
         output_file=open(args.output, 'a+')
         output_file.write(header.lightdef_raw.decode())
         output_file.close()
     
-    # Printing results
     print("Transfering of DTX v2 went successfully from {} to {}".format(args.input, args.output))
 
 # Transfering meta information between the files for DTX v1
