@@ -198,12 +198,25 @@ class DtxHeader(object):
         self.detail_scale = struct.unpack("<f",bytes_.read(4))[0]
         self.detail_angle = int.from_bytes(bytes_.read(2), 'little', signed=True)
 
-        # If first byte of the command row is 0, it's not used/not set
+       # Read a row of 128 Bytes
         self.command_raw = bytes_.read(128)
-        if int(self.command_raw[0]) == 0:
-            self.command_string = ""
+
+        # If first Byte of command row is 0x00, command string is not used/not set
+        if self.command_raw[0] == 0x00:
+               self.command_string = ""
         else:
-            self.command_string = self.command_raw.decode('unicode_escape')
+            # Look for the first 0x00 (Null-Byte)
+            null_byte_index = self.command_raw.find(b'\x00')
+
+            if null_byte_index != -1:
+                # Convert all chars until the first 0x00 to a string
+                self.command_string = self.command_raw[:null_byte_index].decode('utf-8')
+            else:
+                # when no Null-Byte is found, decode the whole string
+                self.command_string = self.command_raw.decode('utf-8')
+
+            # Fill with null char (\0) to the length of 128
+            self.command_string = self.command_string.ljust(128, '\0')
 
         # If light_flag is 1, we find LIGHTDEFS definition and read all the bytes to the end of file starting from 32nd byte
         # It's always 9 bytes of LIGHTDEF and 23 bytes of random data before the real information starting
